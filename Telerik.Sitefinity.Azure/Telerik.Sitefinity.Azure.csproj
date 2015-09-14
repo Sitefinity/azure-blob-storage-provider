@@ -31,7 +31,7 @@
     <Prefer32Bit>false</Prefer32Bit>
     <StyleCopTreatErrorsAsWarnings>false</StyleCopTreatErrorsAsWarnings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <CodeAnalysisRuleSet>Builds\FxCop\Sitefinity.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRuleSet>..\Builds\FxCop\Sitefinity.ruleset</CodeAnalysisRuleSet>
     <RunCodeAnalysis>true</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
