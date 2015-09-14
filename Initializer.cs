@@ -8,9 +8,11 @@ namespace Telerik.Sitefinity.Azure
 {
     public static class Initializer
     {
+        /// <summary>
+        /// Initializes this instance.
+        /// </summary>
         public static void Initialize()
         {
-           
         }
     }
 }
