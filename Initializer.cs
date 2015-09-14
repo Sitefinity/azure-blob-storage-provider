@@ -10,7 +10,7 @@ namespace Telerik.Sitefinity.Azure
     {
         public static void Initialize()
         {
-            SystemManager
+           
         }
     }
 }
