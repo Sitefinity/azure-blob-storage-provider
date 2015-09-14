@@ -1,0 +1,41 @@
+<Project DefaultTargets="ExecuteStyleCopTask" xmlns= "http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+ <Import Project="$(MSBuildProjectDirectory)\..\References\MSBuild.Community.Tasks.Targets"/>
+ 
+ <UsingTask AssemblyFile="StyleCop 4.7\StyleCop.dll" TaskName="StyleCopTask"/>
+	  
+	<PropertyGroup>
+	      <StyleCopMaxViolationCount Condition="$(StyleCopMaxViolationCount) ==''">1000000000000</StyleCopMaxViolationCount>
+	      <StyleCopForceFullAnalysis Condition="$(StyleCopForceFullAnalysis) ==''">true</StyleCopForceFullAnalysis>
+        <DefineConstants Condition="$(DefineConstants) ==''">DEBUG;TRACE</DefineConstants>
+        <StyleCopTreatErrorsAsWarnings Condition="$(StyleCopTreatErrorsAsWarnings) ==''">true</StyleCopTreatErrorsAsWarnings>
+        <StyleCopCacheResults Condition="$(StyleCopCacheResults) ==''">false</StyleCopCacheResults>
+        <StyleCopOverrideSettingsFile Condition="$(StyleCopOverrideSettingsFile) ==''"></StyleCopOverrideSettingsFile>
+	 </PropertyGroup>
+    
+  <Target Name="ExecuteStyleCopTask">
+	
+    <Message Text="Start executing StyleCopTask Getting folders to analyze " />
+    
+	<CreateItem Include="$(FoldersToAnalyze)\**\*.cs">
+      <Output TaskParameter="Include" ItemName="StyleCopFiles"/>
+   </CreateItem>
+
+	  <Message Text="Start executing StyleCopTask " />
+
+    <StyleCopTask
+      ProjectFullPath="$(SitefinityProjectPath)"
+      SourceFiles="@(StyleCopFiles)"
+      AdditionalAddinPaths="@(StyleCopAdditionalAddinPaths)"
+      ForceFullAnalysis="$(StyleCopForceFullAnalysis)"
+      DefineConstants="$(DefineConstants)"
+      TreatErrorsAsWarnings="$(StyleCopTreatErrorsAsWarnings)"
+      CacheResults="$(StyleCopCacheResults)"
+      OverrideSettingsFile="$(StyleCopOverrideSettingsFile)"
+      OutputFile="$(SitefinityProjectOutputFile)"
+      MaxViolationCount="$(StyleCopMaxViolationCount)" />
+	  
+	  <XslTransformation OutputPaths="$(SitefinityProjectOutputFile).html" XmlInputPaths="$(SitefinityProjectOutputFile)" XslInputPath="StyleCop 4.7\tools\StyleCopReport.xsl" />
+
+   </Target>
+   
+</Project>
