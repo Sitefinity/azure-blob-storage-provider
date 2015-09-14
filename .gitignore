@@ -6,3 +6,5 @@
 /packages
 /.nuget
 /bin
+/Telerik.Sitefinity.Azure/bin
+/Telerik.Sitefinity.Azure/obj
