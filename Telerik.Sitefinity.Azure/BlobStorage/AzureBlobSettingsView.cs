@@ -19,7 +19,6 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
     /// </remarks>
     public class AzureBlobSettingsView : AjaxDialogBase, IBlobSettingsView
     {
-
         /// <summary>
         /// Gets or sets the path of the external template to be used by the control.
         /// </summary>
@@ -28,19 +27,14 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         {
             get
             {
-                return layoutTemplatePath;
+                return TemplatePath;
             }
+
             set
             {
                 return;
             }
         }
-
-        protected override string LayoutTemplateName
-        {
-            get { return null; }
-        }
-
 
         /// <summary>
         /// Gets the name of the account UI control.
@@ -101,6 +95,9 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
             }
         }
 
+        /// <summary>
+        /// Gets the check box UI control, indicating if local development storage will be used
+        /// </summary>
         public CheckBox UseDevStorage
         {
             get
@@ -110,33 +107,81 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         }
 
         /// <summary>
+        /// Gets or sets the blob storage settings.
+        /// </summary>
+        /// <value>The settings.</value>
+        /// <remarks>
+        /// Expected provider parameters connectionString, containerName
+        /// </remarks>
+        public NameValueCollection Settings
+        {
+            get
+            {
+                var key = this.AccountKey.Value.ToString();
+                var sas = this.GetSignature(key) == null ? null : key;
+
+                return new NameValueCollection()
+                {
+                    {
+                        AzureBlobStorageProvider.ConnectionStringKey,
+                        this.GetAzureConnectionStringFromUI() 
+                    },
+                    {
+                        AzureBlobStorageProvider.ContainerNameKey,
+                        this.ContainerName.Value.ToString()
+                    },
+                    {
+                        AzureBlobStorageProvider.SharedAccessSignatureKey,
+                        sas
+                    },
+                    {
+                        AzureBlobStorageProvider.PublicHostKey,
+                        this.PublicHost.Value.ToString()
+                    }
+                };
+            }
+
+            set
+            {
+                this.settings = value;
+            }
+        }
+
+        /// <inheritdoc />
+        protected override string LayoutTemplateName
+        {
+            get { return null; }
+        }
+
+        /// <summary>
         /// Initializes the settings view controls.
         /// </summary>
-        /// <param name="container"></param>
+        /// <param name="container">The container</param>
         protected override void InitializeControls(GenericContainer container)
         {
             if (!this.Page.IsPostBack)
             {
-                if (settings[AzureBlobStorageProvider.ConnectionStringKey] != null)
+                if (this.settings[AzureBlobStorageProvider.ConnectionStringKey] != null)
                 {
-                    PopulateUIFromConnectionString(
-                        settings[AzureBlobStorageProvider.ConnectionStringKey],
-                        settings[AzureBlobStorageProvider.SharedAccessSignatureKey]);
+                    this.PopulateUIFromConnectionString(
+                        this.settings[AzureBlobStorageProvider.ConnectionStringKey],
+                        this.settings[AzureBlobStorageProvider.SharedAccessSignatureKey]);
                 }
 
-                if (settings[AzureBlobStorageProvider.ContainerNameKey] != null)
-                    this.ContainerName.Value = settings[AzureBlobStorageProvider.ContainerNameKey];
+                if (this.settings[AzureBlobStorageProvider.ContainerNameKey] != null)
+                    this.ContainerName.Value = this.settings[AzureBlobStorageProvider.ContainerNameKey];
 
-                if (settings[AzureBlobStorageProvider.PublicHostKey] != null)
-                    this.PublicHost.Value = settings[AzureBlobStorageProvider.PublicHostKey];
+                if (this.settings[AzureBlobStorageProvider.PublicHostKey] != null)
+                    this.PublicHost.Value = this.settings[AzureBlobStorageProvider.PublicHostKey];
             }
         }
 
+        /// <inheritdoc />
         protected override HtmlTextWriterTag TagKey
         {
             get
             {
-                //we use div wrapper tag to make easier common styling
+                // We use div wrapper tag to make easier common styling
                 return HtmlTextWriterTag.Div;
             }
         }
@@ -144,32 +189,30 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         /// <summary>
         /// Gets the azure connection string from the UI Controls
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The connection string</returns>
         private string GetAzureConnectionStringFromUI()
         {
-            if (UseDevStorage.Checked)
+            if (this.UseDevStorage.Checked)
             {
-                return devStoreConnectionString;
+                return DevStoreConnectionString;
             }
 
-            string protocol = DefaultEndpointsProtocol.Checked ? "https" : "http";
-            string accountName = AccountName.Value.ToString();
-            string key = AccountKey.Value.ToString();
+            string protocol = this.DefaultEndpointsProtocol.Checked ? "https" : "http";
+            string accountName = this.AccountName.Value.ToString();
+            string key = this.AccountKey.Value.ToString();
 
-            var signature = GetSignature(key);
+            var signature = this.GetSignature(key);
             if (signature != null)
             {
-                return string.Format("BlobEndpoint={0}://{1}.blob.core.windows.net/;SharedAccessSignature={2}",
-                    protocol, accountName, signature);
+                return string.Format("BlobEndpoint={0}://{1}.blob.core.windows.net/;SharedAccessSignature={2}", protocol, accountName, signature);
             }
 
-            return string.Format("DefaultEndpointsProtocol={0};AccountName={1};AccountKey={2}",
-                protocol, accountName, key);    
+            return string.Format("DefaultEndpointsProtocol={0};AccountName={1};AccountKey={2}", protocol, accountName, key);
         }
 
         private string GetSignature(string key)
         {
-            var sasMatch = sasRegex.Match(key);
+            var sasMatch = SasRegex.Match(key);
             if (!sasMatch.Success)
                 return null;
 
@@ -180,18 +223,19 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         /// Populates the UI controls from connection string.
         /// </summary>
         /// <param name="azureConnectionString">The azure connection string.</param>
+        /// <param name="sas">The shared access signature.</param>
         private void PopulateUIFromConnectionString(string azureConnectionString, string sas = null)
         {
-            if (azureConnectionString == devStoreConnectionString)
+            if (azureConnectionString == DevStoreConnectionString)
             {
                 this.UseDevStorage.Checked = true;
                 return;
             }
-            
+
             var settings = azureConnectionString.Split(';');
             foreach (var setting in settings)
             {
-                var settingsPair = setting.Split(new char[] {'='}, 2, StringSplitOptions.None);
+                var settingsPair = setting.Split(new char[] { '=' }, 2, StringSplitOptions.None);
                 string value = settingsPair[1];
 
                 switch (settingsPair[0])
@@ -221,52 +265,11 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
                 this.AccountKey.Value = sas;
         }
 
-        /// <summary>
-        /// Gets or sets the blob storage settings.
-        /// </summary>
-        /// <value>The settings.</value>
-        /// <remarks>
-        /// Expected provider parameters connectionString, containerName
-        /// </remarks>
-        public NameValueCollection Settings
-        {
-            get
-            {
-                var key = this.AccountKey.Value.ToString();
-                var sas = GetSignature(key) == null ? null : key;
+        private NameValueCollection settings;
 
-                return new NameValueCollection()
-                {
-                    {
-                        AzureBlobStorageProvider.ConnectionStringKey,
-                        GetAzureConnectionStringFromUI() 
-                    },
-                    {
-                        AzureBlobStorageProvider.ContainerNameKey,
-                        this.ContainerName.Value.ToString()
-                    },
-                    {
-                        AzureBlobStorageProvider.SharedAccessSignatureKey,
-                        sas
-                    },
-                    {
-                        AzureBlobStorageProvider.PublicHostKey,
-                        this.PublicHost.Value.ToString()
-                    }
-                };
-            }
-            set
-            {
-                settings = value;
-            }
-        }
-
-        private NameValueCollection settings;        
-
-        private const string devStoreConnectionString = "UseDevelopmentStorage=true";
-        private static readonly Regex sasRegex = new Regex(@"sig=(?<sig>[a-zA-Z0-9\+/%]+[=]{0,2})", RegexOptions.Compiled);
-
-        public static readonly string layoutTemplatePath = ControlUtilities.ToVppPath("Telerik.Sitefinity.Resources.Templates.Backend.Configuration.Basic.AzureBlobSettingsView.ascx");
-        //public static readonly string layoutTemplatePath = "~/AzureBlobSettingsView.ascx";        
+        private static readonly string TemplatePath = ControlUtilities.ToVppPath("Telerik.Sitefinity.Resources.Templates.Backend.Configuration.Basic.AzureBlobSettingsView.ascx");
+        private const string DevStoreConnectionString = "UseDevelopmentStorage=true";
+        private static readonly Regex SasRegex = new Regex(@"sig=(?<sig>[a-zA-Z0-9\+/%]+[=]{0,2})", RegexOptions.Compiled);
+        ////public static readonly string layoutTemplatePath = "~/AzureBlobSettingsView.ascx";        
     }
 }

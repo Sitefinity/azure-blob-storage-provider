@@ -19,68 +19,30 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
     {
         #region Properties
 
-        public const string ConnectionStringKey = "connectionString";
-        public const string ContainerNameKey = "containerName";
-        public const string PublicHostKey = "publicHost";
-        public const string SharedAccessSignatureKey = "SAS";
-        public const string ParallelOperationThreadCountKey = "parallelOperationThreadCount";
-
-        #endregion
-
-        #region Initialization
         /// <summary>
-        /// Initializes the storage.
+        /// The connection string key constant
         /// </summary>
-        /// <param name="config">The config.</param>
-        protected override void InitializeStorage(NameValueCollection config)
-        {
-            this.client = this.CreateBlobClient(config);
+        public const string ConnectionStringKey = "connectionString";
 
-            this.containerName = config[ContainerNameKey];
-            if (String.IsNullOrEmpty(containerName))
-                containerName = this.Name.ToLower();
-            // TODO: Azure - container name should be validated 
+        /// <summary>
+        /// The container name constant
+        /// </summary>
+        public const string ContainerNameKey = "containerName";
 
-            config.Remove(ContainerNameKey);
+        /// <summary>
+        /// The public host key constant
+        /// </summary>
+        public const string PublicHostKey = "publicHost";
 
-            this.rootUrl = UrlPath.GetAbsoluteHost(config[PublicHostKey])
-                ?? this.client.BaseUri.ToString();
-            if (this.rootUrl[this.rootUrl.Length - 1] != '/')
-                this.rootUrl += "/";
-        }
+        /// <summary>
+        /// The shared access signature key constant
+        /// </summary>
+        public const string SharedAccessSignatureKey = "SAS";
 
-        protected virtual CloudBlobClient CreateBlobClient(NameValueCollection config)
-        {
-            this.connectionString = config[ConnectionStringKey];
-            if (String.IsNullOrEmpty(this.connectionString))
-                throw new ConfigurationErrorsException("'{0}' is not specified.".Arrange(ConnectionStringKey));
-            config.Remove(ConnectionStringKey);
-            CloudStorageAccount account = null;
-            try
-            {
-                account = CloudStorageAccount.Parse(this.connectionString);
-            }
-            catch (FormatException e)
-            {
-                throw new BlobStorageException("Invalid blob storage credentials", e);
-            }
-
-            string sas = config[SharedAccessSignatureKey];
-            if (sas != null)
-            {
-                config.Remove(SharedAccessSignatureKey);
-                return new CloudBlobClient(account.BlobEndpoint, new StorageCredentials(sas));
-            }
-
-            var blobClient = account.CreateCloudBlobClient();
-
-            var val = config[ParallelOperationThreadCountKey];
-            if (!String.IsNullOrEmpty(val))
-                blobClient.DefaultRequestOptions.ParallelOperationThreadCount = int.Parse(val);
-            config.Remove(ParallelOperationThreadCountKey);
-
-            return blobClient;
-        }
+        /// <summary>
+        /// The parallel operations count key constant
+        /// </summary>
+        public const string ParallelOperationThreadCountKey = "parallelOperationThreadCount";
 
         #endregion
 
@@ -88,7 +50,7 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         /// Gets the upload stream.
         /// </summary>
         /// <param name="content">The content.</param>
-        /// <returns></returns>
+        /// <returns>The upload stream</returns>
         public override Stream GetUploadStream(IBlobContent content)
         {
             var container = this.GetOrCreateContainer(this.containerName);
@@ -100,13 +62,18 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         /// Gets the download stream.
         /// </summary>
         /// <param name="content">The content.</param>
-        /// <returns></returns>
+        /// <returns>The download stream</returns>
         public override Stream GetDownloadStream(IBlobContent content)
         {
             CloudBlob blob = this.GetBlob(content);
             return blob.OpenRead();
         }
 
+        /// <summary>
+        /// Downloads a content to the stream
+        /// </summary>
+        /// <param name="content">The content</param>
+        /// <param name="target">The target stream</param>
         public void DownloadToStream(IBlobContent content, Stream target)
         {
             CloudBlob blob = this.GetBlob(content);
@@ -127,7 +94,7 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
             }
             catch (Exception e)
             {
-                throw new BlobStorageException(String.Format("Cannot delete BLOB '{0}' from library storage '{1}'. {2}: {3}.", this.GetBlobName(content), this.Name, e.Source, e.Message), e);
+                throw new BlobStorageException(string.Format("Cannot delete BLOB '{0}' from library storage '{1}'. {2}: {3}.", this.GetBlobName(content), this.Name, e.Source, e.Message), e);
             }
         }
 
@@ -212,11 +179,75 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
             return base.HasSameLocation(other);
         }
 
+        #region Initialization
+
+        /// <summary>
+        /// Initializes the storage.
+        /// </summary>
+        /// <param name="config">The config.</param>
+        protected override void InitializeStorage(NameValueCollection config)
+        {
+            this.client = this.CreateBlobClient(config);
+
+            this.containerName = config[ContainerNameKey];
+            if (string.IsNullOrEmpty(this.containerName))
+                this.containerName = this.Name.ToLower();
+
+            //// TODO: Azure - container name should be validated 
+
+            config.Remove(ContainerNameKey);
+
+            this.rootUrl = UrlPath.GetAbsoluteHost(config[PublicHostKey])
+                ?? this.client.BaseUri.ToString();
+            if (this.rootUrl[this.rootUrl.Length - 1] != '/')
+                this.rootUrl += "/";
+        }
+
+        /// <summary>
+        /// Creates a blob client
+        /// </summary>
+        /// <param name="config">The config to use</param>
+        /// <returns>The blob client</returns>
+        protected virtual CloudBlobClient CreateBlobClient(NameValueCollection config)
+        {
+            this.connectionString = config[ConnectionStringKey];
+            if (string.IsNullOrEmpty(this.connectionString))
+                throw new ConfigurationErrorsException("'{0}' is not specified.".Arrange(ConnectionStringKey));
+            config.Remove(ConnectionStringKey);
+            CloudStorageAccount account = null;
+            try
+            {
+                account = CloudStorageAccount.Parse(this.connectionString);
+            }
+            catch (FormatException e)
+            {
+                throw new BlobStorageException("Invalid blob storage credentials", e);
+            }
+
+            string sas = config[SharedAccessSignatureKey];
+            if (sas != null)
+            {
+                config.Remove(SharedAccessSignatureKey);
+                return new CloudBlobClient(account.BlobEndpoint, new StorageCredentials(sas));
+            }
+
+            var blobClient = account.CreateCloudBlobClient();
+
+            var val = config[ParallelOperationThreadCountKey];
+            if (!string.IsNullOrEmpty(val))
+                blobClient.DefaultRequestOptions.ParallelOperationThreadCount = int.Parse(val);
+            config.Remove(ParallelOperationThreadCountKey);
+
+            return blobClient;
+        }
+
+        #endregion
+
         #region Private
 
         private string GetBlobPath(IBlobContentLocation content)
         {
-            return String.Concat(this.containerName, "/", this.GetBlobName(content));
+            return string.Concat(this.containerName, "/", this.GetBlobName(content));
         }
 
         private CloudBlockBlob GetBlob(IBlobContentLocation blobLocation)
@@ -245,95 +276,5 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         private string containerName;
 
         #endregion
-    }
-
-    /// <summary>
-    /// Implements a wrapper for Azure Blob Sream to fix an issue with CloudBlob.OpenRead() not returning the whole data
-    /// </summary>
-    internal class AzureBlobDownloadStream : Stream
-    {
-        public AzureBlobDownloadStream(CloudBlobStream stream)
-        {
-            this.originalStream = stream;
-        }
-
-        public override bool CanRead
-        {
-            get { return originalStream.CanRead; }
-        }
-
-        public override bool CanSeek
-        {
-            get { return originalStream.CanSeek; }
-        }
-
-        public override bool CanWrite
-        {
-            get { return originalStream.CanWrite; }
-        }
-
-        public override void Flush()
-        {
-            originalStream.Flush();
-        }
-
-        public override long Length
-        {
-            get { return originalStream.Length; }
-        }
-
-        public override long Position
-        {
-            get
-            {
-                return this.originalStream.Position;
-            }
-            set
-            {
-                this.originalStream.Position = value;
-            }
-        }
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            var bytesRead = this.originalStream.Read(buffer, offset, count);
-            if (offset == 0 && bytesRead > 0 && bytesRead < count)
-            {
-                var bytesLeft = count - bytesRead;
-                var extendedBuffer = new byte[bytesLeft];
-                var bytesLeftRead = this.originalStream.Read(extendedBuffer, 0, bytesLeft);
-
-                if (bytesLeftRead > 0)
-                {
-                    Array.Copy(extendedBuffer, 0, buffer, bytesRead, bytesLeftRead);
-                    bytesRead += bytesLeftRead;
-                }
-            }
-
-            return bytesRead;
-        }
-
-        public override long Seek(long offset, SeekOrigin origin)
-        {
-            return this.originalStream.Seek(offset, origin);
-        }
-
-        public override void SetLength(long value)
-        {
-            this.originalStream.SetLength(value);
-        }
-
-        public override void Write(byte[] buffer, int offset, int count)
-        {
-            this.originalStream.Write(buffer, offset, count);
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            base.Dispose(disposing);
-            originalStream.Dispose();
-        }
-
-        private readonly CloudBlobStream originalStream;
     }
 }
