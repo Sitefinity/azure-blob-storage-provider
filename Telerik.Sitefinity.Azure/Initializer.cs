@@ -24,6 +24,35 @@ namespace Telerik.Sitefinity.Azure
             {
                 UpgradeTo5900();
             }
+
+            using (new ElevatedConfigModeRegion())
+            {
+                var librariesConfig = Config.Get<LibrariesConfig>();
+                var azureBlobStorageType = librariesConfig.BlobStorage.BlobStorageTypes.Values.Where(b => b.ProviderType == typeof(AzureBlobStorageProvider)).FirstOrDefault();
+                if (azureBlobStorageType == null)
+                {
+                    azureBlobStorageType = CreateAzureBlobStorageProviderType(librariesConfig);
+                    azureBlobStorageType.ProviderType = typeof(AzureBlobStorageProvider);
+                    azureBlobStorageType.SettingsViewTypeOrPath = typeof(AzureBlobSettingsView).FullName;
+
+                    ConfigManager.GetManager().SaveSection(librariesConfig);
+                }
+            }
+        }
+
+        static BlobStorageTypeConfigElement CreateAzureBlobStorageProviderType(LibrariesConfig librariesConfig)
+        {
+            var blobStorageTypes = librariesConfig.BlobStorage.BlobStorageTypes;
+            var azureBlobStorageType = new BlobStorageTypeConfigElement(blobStorageTypes)
+            {
+                Name = "Azure",
+                Title = "WindowsAzure",
+                Description = "BlobStorageAzureTypeDescription",
+                ResourceClassId = typeof(LibrariesResources).Name
+            };
+
+            blobStorageTypes.Add(azureBlobStorageType);
+            return azureBlobStorageType;
         }
 
         static void UpgradeTo5900()
@@ -45,13 +74,7 @@ namespace Telerik.Sitefinity.Azure
                 var azureBlobStorageType = librariesConfig.BlobStorage.BlobStorageTypes.Values.Where(b => b.ProviderType == oldProviderType).FirstOrDefault();
                 if (azureBlobStorageType == null)
                 {
-                    azureBlobStorageType = new BlobStorageTypeConfigElement(providersConfig)
-                    {
-                        Name = "Azure",
-                        Title = "WindowsAzure",
-                        Description = "BlobStorageAzureTypeDescription",
-                        ResourceClassId = typeof(LibrariesResources).Name
-                    };
+                    azureBlobStorageType = CreateAzureBlobStorageProviderType(librariesConfig);
                 }
 
                 azureBlobStorageType.ProviderType = typeof(AzureBlobStorageProvider);
