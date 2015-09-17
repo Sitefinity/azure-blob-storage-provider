@@ -174,7 +174,6 @@
   <ItemGroup>
     <Compile Include="BlobStorage\AzureBlobSettingsView.cs" />
     <Compile Include="BlobStorage\AzureBlobStorageProvider.cs" />
-    <Compile Include="Initializer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
