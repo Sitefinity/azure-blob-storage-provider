@@ -11,7 +11,7 @@ using System.Web;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("Telerik.Sitefinity.Azure")]
-[assembly: AssemblyCopyright("Copyright © Telerik 2016")]
+[assembly: AssemblyCopyright("Copyright © 2005-2016 Telerik AD. All rights reserved.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
