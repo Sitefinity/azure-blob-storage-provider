@@ -1,6 +1,6 @@
 # Sitefinity's Azure Blob Storage Provider
 
-####Since version 8.2 Sitefinity suuports AzureBlobStorageProvider out of the box.
+#### Since version 8.2 Sitefinity supports AzureBlobStorageProvider out of the box.
 
 Sitefinity's Azure Blob Storage Provider is an implementation of a cloud blob storage provider, which stores the binary blob data of Sitefinity's library items on Azure storage. This document describes how to use the provider.
 
