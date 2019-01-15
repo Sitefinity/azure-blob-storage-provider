@@ -55,6 +55,9 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         {
             var container = this.GetOrCreateContainer(this.containerName);
             CloudBlockBlob blob = container.GetBlockBlobReference(GetBlobName(content));
+
+            blob.Properties.ContentType = content.MimeType;
+
             return blob.OpenWrite();
         }
 
