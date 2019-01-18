@@ -33,7 +33,7 @@ using System.Web;
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("12.0.0")]
-[assembly: AssemblyFileVersion("12.0.0")]
+[assembly: AssemblyVersion("11.2.0")]
+[assembly: AssemblyFileVersion("11.2.0")]
 
 [assembly: PreApplicationStartMethod(typeof(Telerik.Sitefinity.Azure.Initializer), "Initialize")]
