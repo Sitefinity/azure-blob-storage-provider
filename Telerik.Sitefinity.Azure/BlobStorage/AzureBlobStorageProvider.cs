@@ -6,6 +6,7 @@ using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Telerik.Sitefinity.BlobStorage;
+using Telerik.Sitefinity.Libraries.Model;
 using Telerik.Sitefinity.Modules.Libraries.BlobStorage;
 using Telerik.Sitefinity.Web;
 using Storage = Microsoft.WindowsAzure.Storage;
@@ -58,6 +59,8 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
 
             blob.Properties.ContentType = content.MimeType;
 
+            blob.Metadata[nameof(IBlobContent.FileId)] = content.FileId.ToString();
+
             return blob.OpenWrite();
         }
 
@@ -87,13 +90,22 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         public override void Delete(IBlobContentLocation content)
         {
             CloudBlob blob = this.GetBlob(content);
+
             try
             {
-                var requestOptions = new Storage.Blob.BlobRequestOptions()
+                if (blob.Exists())
                 {
-                    RetryPolicy = new Storage.RetryPolicies.NoRetry() // RetryPolicies.Retry(1, TimeSpan.FromSeconds(1))
-                };
-                blob.DeleteIfExists(DeleteSnapshotsOption.None, null, requestOptions, null);
+                    blob.FetchAttributes();
+                    bool hasFileId = blob.Metadata.ContainsKey(nameof(IBlobContentLocation.FileId));
+                    if (!hasFileId || (hasFileId && blob.Metadata[nameof(IBlobContentLocation.FileId)].Equals(content.FileId.ToString())))
+                    {
+                        var requestOptions = new Storage.Blob.BlobRequestOptions()
+                        {
+                            RetryPolicy = new Storage.RetryPolicies.NoRetry() // RetryPolicies.Retry(1, TimeSpan.FromSeconds(1))
+                        };
+                        blob.DeleteIfExists(DeleteSnapshotsOption.None, null, requestOptions, null);
+                    }
+                }
             }
             catch (Exception e)
             {
@@ -160,6 +172,9 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
 
                 this.SetProperties(destination, this.GetProperties(source));
             }
+
+            destBlob.Metadata[nameof(IBlobContentLocation.FileId)] = source.FileId.ToString();
+            destBlob.SetMetadata();
         }
 
         /// <inheritdoc />
