@@ -270,18 +270,39 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
 
         private CloudBlockBlob GetBlob(IBlobContentLocation blobLocation)
         {
-            var container = this.client.GetContainerReference(this.containerName);
-            var blob = container.GetBlockBlobReference(this.GetBlobName(blobLocation));
-            return blob;
+            try
+            {
+                var container = this.client.GetContainerReference(this.containerName);
+                var blob = container.GetBlockBlobReference(this.GetBlobName(blobLocation));
+                return blob;
+            }
+            catch (StorageException e)
+            {
+                throw this.WrapStorageException(e);
+            }
         }
 
         private CloudBlobContainer GetOrCreateContainer(string name)
         {
-            CloudBlobContainer container = this.client.GetContainerReference(name);
+            try
+            {
+                CloudBlobContainer container = this.client.GetContainerReference(name);
 
-            // Note: For some reason this returns false even the container did not already exists (even in the 5.0.2 this behavior is same)
-            container.CreateIfNotExists(BlobContainerPublicAccessType.Blob);
-            return container;
+                // Note: For some reason this returns false even the container did not already exists (even in the 5.0.2 this behavior is same)
+                container.CreateIfNotExists(BlobContainerPublicAccessType.Blob);
+                return container;
+            }
+            catch (StorageException e)
+            {
+                throw this.WrapStorageException(e);
+            }
+        }
+
+        private Exception WrapStorageException(StorageException ex)
+        {
+            var requestInfo = ex.RequestInformation != null && !string.IsNullOrEmpty(ex.RequestInformation.ErrorCode) ?
+                string.Concat("Request information error code: ", ex.RequestInformation.ErrorCode) : string.Empty;
+            return requestInfo.IsNullOrEmpty() ? ex : new Exception(string.Join(" ", ex.Message, requestInfo), ex);
         }
 
         #endregion
