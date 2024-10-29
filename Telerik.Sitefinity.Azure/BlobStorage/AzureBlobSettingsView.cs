@@ -1,10 +1,14 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Web;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+using Telerik.Sitefinity.Configuration;
+using Telerik.Sitefinity.Configuration.Web.UI;
+using Telerik.Sitefinity.Modules.Libraries.Configuration;
 using Telerik.Sitefinity.Modules.Libraries.Web.UI.BlobStorage;
 using Telerik.Sitefinity.Web.UI;
 using Telerik.Sitefinity.Web.UI.Fields;
@@ -17,8 +21,27 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
     /// <remarks>
     /// Expected provider parameters connectionString, containerName
     /// </remarks>
-    public class AzureBlobSettingsView : AjaxDialogBase, IBlobSettingsView
+    public class AzureBlobSettingsView : AjaxDialogBase, IBlobSettingsView, IAdvancedSettingsView
     {
+        private Type providerType;
+        private const string ObfuscatedValue = "***************";
+
+        /// <summary>
+        /// Gets or sets the provider type
+        /// </summary>
+        public virtual Type ProviderType
+        {
+            get
+            {
+                return this.providerType;
+            }
+
+            set
+            {
+                this.providerType = value;
+            }
+        }
+
         /// <summary>
         /// Gets or sets the path of the external template to be used by the control.
         /// </summary>
@@ -106,6 +129,43 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
             }
         }
 
+        private IDictionary<string, ParamInfo> currentSettings = null;
+
+        private IDictionary<string, ParamInfo> CurrentSettings
+        {
+            get
+            {
+                if (this.currentSettings == null)
+                {
+                    var configBlobStorage = Config.Get<LibrariesConfig>().BlobStorage;
+                    var storageType = configBlobStorage.BlobStorageTypes.Values
+                        .FirstOrDefault(t => t.ProviderType != null && t.ProviderType == this.ProviderType);
+
+                    if (storageType != null)
+                        this.currentSettings = storageType.Parameters.AllKeys.ToDictionary(key => key, key => ParamInfo.FromString(storageType.Parameters[key]));
+                    else
+                        this.currentSettings = new Dictionary<string, ParamInfo>();
+
+                    var providerName = this.Page.Request.QueryString["providerName"];
+                    if (providerName != null)
+                    {
+                        if (configBlobStorage.Providers.TryGetValue(providerName, out var provider))
+                        {
+                            foreach (string key in provider.Parameters.Keys)
+                            {
+                                if (this.currentSettings.TryGetValue(key, out var currentSetting))
+                                {
+                                    currentSetting.Value = provider.Parameters[key];
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return this.currentSettings;
+            }
+        }
+
         /// <summary>
         /// Gets or sets the blob storage settings.
         /// </summary>
@@ -118,13 +178,22 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
             get
             {
                 var key = this.AccountKey.Value.ToString();
+                if (key == ObfuscatedValue)
+                {
+                    var currentConnectionString = this.CurrentSettings[AzureBlobStorageProvider.ConnectionStringKey].Value;
+                    var currentSas = this.CurrentSettings[AzureBlobStorageProvider.SharedAccessSignatureKey].Value;
+
+                    var connectionStringProperties = new ConnectionStringProperties(currentConnectionString, currentSas);
+                    key = connectionStringProperties.AccountKey;
+                }
+
                 var sas = this.GetSignature(key) == null ? null : key;
 
                 return new NameValueCollection()
                 {
                     {
                         AzureBlobStorageProvider.ConnectionStringKey,
-                        this.GetAzureConnectionStringFromUI() 
+                        this.GetAzureConnectionStringFromUI(key)
                     },
                     {
                         AzureBlobStorageProvider.ContainerNameKey,
@@ -145,6 +214,15 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
             {
                 this.settings = value;
             }
+        }
+
+        public bool IsSecretParameter(string key)
+        {
+            ParamInfo paramInfo;
+            if (this.CurrentSettings.TryGetValue(key, out paramInfo))
+                return (paramInfo.Flags & ParamFlags.Secret) > 0;
+
+            return false;
         }
 
         /// <inheritdoc />
@@ -190,7 +268,7 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         /// Gets the azure connection string from the UI Controls
         /// </summary>
         /// <returns>The connection string</returns>
-        private string GetAzureConnectionStringFromUI()
+        private string GetAzureConnectionStringFromUI(string accountKey)
         {
             if (this.UseDevStorage.Checked)
             {
@@ -199,7 +277,7 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
 
             string protocol = this.DefaultEndpointsProtocol.Checked ? "https" : "http";
             string accountName = this.AccountName.Value.ToString();
-            string key = this.AccountKey.Value.ToString();
+            string key = accountKey ?? this.AccountKey.Value.ToString();
 
             var signature = this.GetSignature(key);
             if (signature != null)
@@ -232,37 +310,11 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
                 return;
             }
 
-            var settings = azureConnectionString.Split(';');
-            foreach (var setting in settings)
-            {
-                var settingsPair = setting.Split(new char[] { '=' }, 2, StringSplitOptions.None);
-                string value = settingsPair[1];
+            var connectionStringProperties = new ConnectionStringProperties(azureConnectionString, sas);
 
-                switch (settingsPair[0])
-                {
-                    case "AccountName":
-                        this.AccountName.Value = value;
-                        break;
-                    case "AccountKey":
-                        this.AccountKey.Value = value;
-                        break;
-                    case "DefaultEndpointsProtocol":
-                        this.DefaultEndpointsProtocol.Checked = value.ToLowerInvariant() == "https";
-                        break;
-                    case "BlobEndpoint":
-                        var uri = new Uri(value);
-                        this.DefaultEndpointsProtocol.Checked = uri.Scheme == "https";
-                        this.AccountName.Value = uri.Host.Substring(0, uri.Host.IndexOf('.'));
-                        break;
-                    case "SharedAccessSignature":
-                        if (sas == null)
-                            this.AccountKey.Value = string.Format("?sig={0}", HttpUtility.UrlEncode(value));
-                        break;
-                }
-            }
-
-            if (sas != null)
-                this.AccountKey.Value = sas;
+            this.AccountKey.Value = ObfuscatedValue;
+            this.AccountName.Value = connectionStringProperties.AccountName;
+            this.DefaultEndpointsProtocol.Checked = connectionStringProperties.DefaultEndpointsProtocol;
         }
 
         private NameValueCollection settings;
@@ -270,6 +322,69 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         private static readonly string TemplatePath = ControlUtilities.ToVppPath("Telerik.Sitefinity.Resources.Templates.Backend.Configuration.Basic.AzureBlobSettingsView.ascx");
         private const string DevStoreConnectionString = "UseDevelopmentStorage=true";
         private static readonly Regex SasRegex = new Regex(@"sig=(?<sig>[a-zA-Z0-9\+/%]+[=]{0,2})", RegexOptions.Compiled);
-        ////public static readonly string layoutTemplatePath = "~/AzureBlobSettingsView.ascx";        
+        
+        private class ParamInfo
+        {
+            public static ParamInfo FromString(string data)
+            {
+                var defaultValue = string.Empty;
+                var flags = ParamFlags.None;
+                if (!data.IsNullOrEmpty())
+                {
+                    var parts = data.Split(new string[] { Delimiter }, StringSplitOptions.None);
+                    if (parts.Length > 0)
+                    {
+                        defaultValue = parts[0].Trim();
+                        for (int i = 1; i < parts.Length; i++)
+                        {
+                            ParamFlags newFlag;
+                            if (Enum.TryParse<ParamFlags>(parts[i].Trim(), out newFlag))
+                                flags |= newFlag;
+                        }
+                    }
+                }
+
+                return new ParamInfo(defaultValue, flags);
+            }
+
+            public ParamInfo()
+                : this(string.Empty, ParamFlags.None)
+            {
+            }
+
+            public ParamInfo(string defaultValue, ParamFlags flags)
+            {
+                this.Value = defaultValue;
+                this.Flags = flags;
+            }
+
+            public string Value
+            {
+                get;
+                set;
+            }
+
+            public bool Encrypted
+            {
+                get;
+                set;
+            }
+
+            public ParamFlags Flags
+            {
+                get;
+                private set;
+            }
+
+            private const string Delimiter = "#sf_";
+        }
+
+        [Flags]
+        private enum ParamFlags
+        {
+            None = 0,
+            Secret = 1,
+            Password = 2
+        }
     }
 }
