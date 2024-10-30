@@ -1,4 +1,4 @@
-# Sitefinity's Azure Blob Storage Provider 
+# Sitefinity's Azure Blob Storage Provider  
 
 #### Since version 8.2 Sitefinity supports AzureBlobStorageProvider out of the box.
 
