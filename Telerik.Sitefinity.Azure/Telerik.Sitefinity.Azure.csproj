@@ -4,6 +4,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Azure.KeyVault.Core" />
+    <PackageReference Include="Microsoft.Rest.ClientRuntime" />
     <PackageReference Include="Microsoft.Data.Edm" />
     <PackageReference Include="Microsoft.Data.OData" />
     <PackageReference Include="Microsoft.Data.Services.Client" />

@@ -45,6 +45,11 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         /// </summary>
         public const string ParallelOperationThreadCountKey = "parallelOperationThreadCount";
 
+        /// <summary>
+        /// The configuration constant for relative urls in SaaS
+        /// </summary>
+        public const string ЕnableRelativeUrls = "enableRelativeUrls";
+
         #endregion
 
         /// <summary>
@@ -147,6 +152,11 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         /// <inheritdoc />
         public override string GetItemUrl(IBlobContentLocation content)
         {
+            if (isRelativeUrlEnabled)
+            {
+                return string.Concat("/", this.GetBlobPath(content));
+            }
+
             return string.Concat(this.rootUrl, this.GetBlobPath(content));
         }
 
@@ -219,6 +229,8 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
                 ?? this.client.BaseUri.ToString();
             if (this.rootUrl[this.rootUrl.Length - 1] != '/')
                 this.rootUrl += "/";
+
+            this.isRelativeUrlEnabled = bool.TryParse(config[ЕnableRelativeUrls], out _);
         }
 
         /// <summary>
@@ -313,6 +325,7 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         private CloudBlobClient client;
         private string rootUrl;
         private string containerName;
+        private bool isRelativeUrlEnabled;
 
         #endregion
     }
