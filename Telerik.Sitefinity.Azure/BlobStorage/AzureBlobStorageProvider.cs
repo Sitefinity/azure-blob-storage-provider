@@ -1,14 +1,23 @@
-﻿using System;
-using System.Collections.Specialized;
-using System.Configuration;
-using System.IO;
+﻿using DocumentFormat.OpenXml.Wordprocessing;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
+using System;
+using System.Collections.Specialized;
+using System.Configuration;
+using System.IO;
+using System.Threading;
+using System.Web;
+using Telerik.Sitefinity.Abstractions;
 using Telerik.Sitefinity.BlobStorage;
+using Telerik.Sitefinity.Configuration;
 using Telerik.Sitefinity.Libraries.Model;
 using Telerik.Sitefinity.Modules.Libraries.BlobStorage;
+using Telerik.Sitefinity.Modules.Libraries.BlobStorage.Dto;
+using Telerik.Sitefinity.Modules.Libraries.Configuration;
+using Telerik.Sitefinity.Services;
 using Telerik.Sitefinity.Web;
+using Telerik.Sitefinity.Web.Services.Contracts.Operations;
 using Storage = Microsoft.WindowsAzure.Storage;
 
 namespace Telerik.Sitefinity.Azure.BlobStorage
@@ -166,22 +175,7 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
             var sourceBlob = this.GetBlob(source);
             var destBlob = this.GetBlob(destination);
 
-            if (!(this.client.Credentials is StorageCredentials))
-            {
-                using (var uploadStream = sourceBlob.OpenRead())
-                {
-                    destBlob.UploadFromStream(uploadStream);
-                }
-            }
-            else
-            {
-                // This is a workaround for the SAS authorization case, for which CopyFromBlob throws an exception.
-                // It imposes PERFORMANCE, NETWORK and FINANCIAL costs. :(
-                using (var uploadSteam = destBlob.OpenWrite())
-                    sourceBlob.DownloadToStream(uploadSteam);
-
-                this.SetProperties(destination, this.GetProperties(source));
-            }
+            this.ServerSideCopy(sourceBlob, destBlob);
 
             destBlob.Metadata[nameof(IBlobContentLocation.FileId)] = source.FileId.ToString();
             destBlob.SetMetadata();
@@ -216,6 +210,12 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         protected override void InitializeStorage(NameValueCollection config)
         {
             this.client = this.CreateBlobClient(config);
+
+            var enableBlobStorageChunkUploadString = ConfigurationManager.AppSettings["sf:enableBlobStorageChunkUpload"];
+            if (bool.TryParse(enableBlobStorageChunkUploadString, out bool enableBlobStorageChunkUpload) && enableBlobStorageChunkUpload)
+            {
+                this.enableBlobStorageChunkUpload = true;
+            }
 
             this.containerName = config[ContainerNameKey];
             if (string.IsNullOrEmpty(this.containerName))
@@ -271,9 +271,129 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
             return blobClient;
         }
 
+        public override ChunkUploadResult UploadChunk(Guid chunkedFileUploadSessionId, int chunkOrdinal, int chunkSize, Stream data)
+        {
+            var container = this.GetOrCreateContainer(this.containerName);
+
+            var blobReference = container.GetBlockBlobReference(GetTempChunksUploadPath(chunkedFileUploadSessionId));
+
+            string blockId = Convert.ToBase64String(BitConverter.GetBytes(chunkOrdinal));
+
+            try
+            {
+                blobReference.PutBlock(blockId, data, null);
+            }
+            catch (Exception ex)
+            {
+                return new FailedChunkUploadResult()
+                {
+                    ChunkedFileUploadSessionId = chunkedFileUploadSessionId,
+                    Exception = ex,
+                    FailedChunkOrdinal = chunkOrdinal,
+                    SuccessfullyUploaded = false
+                };
+            }
+
+            return new ChunkUploadResult()
+            {
+                SuccessfullyUploaded = true,
+                ChunkedFileUploadSessionId = chunkedFileUploadSessionId,
+            };
+        }
+
+        public override MediaContent CommitChunks(Guid chunkedFileUploadSessionId, MediaContent mediaContent, int numberOfChunks, long fileTotalSize, string fileName, string fileExtension)
+        {
+            var container = this.GetOrCreateContainer(this.containerName);
+
+            var blobReference = container.GetBlockBlobReference(GetTempChunksUploadPath(chunkedFileUploadSessionId));
+
+            var blockIds = new string[numberOfChunks];
+            for (int i = 0; i < numberOfChunks; i++)
+            {
+                blockIds[i] = Convert.ToBase64String(BitConverter.GetBytes(i));
+            }
+
+            blobReference.PutBlockList(blockIds);
+
+            base.CommitChunks(chunkedFileUploadSessionId, mediaContent, numberOfChunks, fileTotalSize, fileName, fileExtension);
+
+            var blobName = this.GetBlobName(mediaContent);
+            var finalBlobDestination = container.GetBlockBlobReference(blobName);
+
+            this.ServerSideCopy(blobReference, finalBlobDestination, true); 
+
+            blobReference.DeleteIfExists();
+
+            return mediaContent;
+        }
+
+        public override void CleanUpChunks(Guid chunkedFileUploadSessionId)
+        {
+            var container = this.GetOrCreateContainer(this.containerName);
+
+            var fileId = chunkedFileUploadSessionId.ToString();
+            var blobReference = container.GetBlockBlobReference(fileId);
+
+            if (blobReference.Exists())
+            {
+                var requestOptions = new Storage.Blob.BlobRequestOptions()
+                {
+                    RetryPolicy = new Storage.RetryPolicies.NoRetry() // RetryPolicies.Retry(1, TimeSpan.FromSeconds(1))
+                };
+
+                blobReference.DeleteIfExists(DeleteSnapshotsOption.None, null, requestOptions, null);
+            }
+        }
+
+        public override bool SupportsChunkUpload()
+        {
+            return this.enableBlobStorageChunkUpload && Config.Get<LibrariesConfig>().ChunkedUpload.EnableChunkedUploads;
+        }
+
         #endregion
 
         #region Private
+
+        private void ServerSideCopy(CloudBlockBlob sourceBlob, CloudBlockBlob destBlob, bool deleteSource = false)
+        {
+            var start = DateTime.UtcNow;
+            var timeout = TimeSpan.FromMinutes(1);
+            var copyId = destBlob.StartCopy(sourceBlob);
+
+            while (true)
+            {
+                Thread.Sleep(100);
+                destBlob.FetchAttributes();
+
+                if (DateTime.UtcNow - start > timeout)
+                {
+                    if (destBlob.CopyState.Status == CopyStatus.Pending)
+                        destBlob.AbortCopy(copyId);
+
+                    if (deleteSource)
+                        sourceBlob.DeleteIfExists();
+
+                    destBlob.DeleteIfExists();
+                    throw new TimeoutException("Timeout for committing the blob (default 1 minute) ellapsed.");
+                }
+
+                if (destBlob.CopyState.Status == CopyStatus.Pending)
+                    continue;
+
+                if (destBlob.CopyState.Status == CopyStatus.Success)
+                    break;
+
+                if (deleteSource)
+                    sourceBlob.DeleteIfExists();
+
+                throw new ApplicationException("Failed to copy blob.");
+            }
+        }
+
+        private string GetTempChunksUploadPath(Guid chunkSessionReference)
+        {
+            return $"temp-chunk-upload/{chunkSessionReference}";
+        }
 
         private string GetBlobPath(IBlobContentLocation content)
         {
@@ -326,6 +446,7 @@ namespace Telerik.Sitefinity.Azure.BlobStorage
         private string rootUrl;
         private string containerName;
         private bool isRelativeUrlEnabled;
+        private bool enableBlobStorageChunkUpload;
 
         #endregion
     }

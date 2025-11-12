@@ -3,7 +3,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Telerik.Sitefinity.Core" Version="15.3.8500" />
+    <PackageVersion Include="Telerik.Sitefinity.Core" Version="15.4.8600" />
     <PackageVersion Include="Microsoft.Azure.KeyVault.Core" Version="3.0.5" />
     <PackageVersion Include="Microsoft.Rest.ClientRuntime" Version="2.3.24" />
     <PackageVersion Include="Microsoft.Data.Edm" Version="5.8.4" />
